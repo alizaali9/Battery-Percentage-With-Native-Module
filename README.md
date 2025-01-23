@@ -1,79 +1,216 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Battery Percentage Fetcher
 
-# Getting Started
+This React Native project fetches and displays the battery percentage of the user's device using a native module. The application leverages platform-specific code (Kotlin for Android) to retrieve the battery level, ensuring smooth integration with React Native. Note: iOS functionality has not been implemented or tested yet.
 
->**Note**: Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/environment-setup) instructions till "Creating a new application" step, before proceeding.
+---
 
-## Step 1: Start the Metro Server
+## Features
+1. Fetches the current battery percentage of the device.
+2. Displays the battery percentage in real-time.
+3. Refresh button to manually update the battery level.
+4. Android support only (iOS functionality not implemented).
 
-First, you will need to start **Metro**, the JavaScript _bundler_ that ships _with_ React Native.
+---
 
-To start Metro, run the following command from the _root_ of your React Native project:
+## Prerequisites
+- Node.js (v14 or above)
+- React Native CLI or Expo
+- Android Studio (for Android development)
 
-```bash
-# using npm
-npm start
+---
 
-# OR using Yarn
-yarn start
-```
+## Installation
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/alizaali9/Battery-Percentage-With-Native-Module
+   cd Battery-Percentage-With-Native-Module
+   ```
 
-## Step 2: Start your Application
+2. Install dependencies:
+   ```bash
+   npm install
+   # or
+   yarn install
+   ```
 
-Let Metro Bundler run in its _own_ terminal. Open a _new_ terminal from the _root_ of your React Native project. Run the following command to start your _Android_ or _iOS_ app:
+3. Link the native module:
+   - For React Native 0.60+, auto-linking should take care of this.
+   - For older versions, link manually:
+     ```bash
+     react-native link
+     ```
 
-### For Android
+---
 
-```bash
-# using npm
-npm run android
+## Native Module Integration
 
-# OR using Yarn
-yarn android
-```
+### Android
+1. Navigate to `android/app/src/main/java/com/<your_project>/`.
+2. Create a file `BatteryModule.kt` and `BatteryPackage.kt`:
+   ```kotlin
+   <---- BatteryModule.kt ---->
+   package com.<your_project>
 
-### For iOS
+   import android.content.Intent
+   import android.content.IntentFilter
+   import android.os.BatteryManager
+   import com.facebook.react.bridge.Promise
+   import com.facebook.react.bridge.ReactApplicationContext
+   import com.facebook.react.bridge.ReactContextBaseJavaModule
+   import com.facebook.react.bridge.ReactMethod
 
-```bash
-# using npm
-npm run ios
+   class BatteryModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
+    private val context: ReactApplicationContext = reactContext
 
-# OR using Yarn
-yarn ios
-```
+    override fun getName(): String {
+        return "BatteryModule"
+    }
 
-If everything is set up _correctly_, you should see your new app running in your _Android Emulator_ or _iOS Simulator_ shortly provided you have set up your emulator/simulator correctly.
+    @ReactMethod
+    fun getBatteryLevel(promise: Promise) {
+        try {
+            val intentFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            val batteryStatus = context.registerReceiver(null, intentFilter)
+            val level = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+            val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+            val batteryPct = (level / scale.toFloat()) * 100
+            promise.resolve(batteryPct.toInt())
+        } catch (e: Exception) {
+            promise.reject("ERROR", e.message)
+        }}
+   }
+   ```
+   ---
+   ```kotlin
+   <---- BatteryPackage.kt ---->
+   package com.<your_project>
 
-This is one way to run your app — you can also run it directly from within Android Studio and Xcode respectively.
+   import com.facebook.react.ReactPackage
+   import com.facebook.react.bridge.NativeModule
+   import com.facebook.react.bridge.ReactApplicationContext
+   import com.facebook.react.uimanager.ViewManager
 
-## Step 3: Modifying your App
+   class BatteryPackage : ReactPackage {
+       override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
+           return listOf(BatteryModule(reactContext))
+       }
 
-Now that you have successfully run the app, let's modify it.
+       override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {
+           return emptyList()
+       }
+   }
+   ```
 
-1. Open `App.tsx` in your text editor of choice and edit some lines.
-2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
+4. Update `MainApplication.kt` to include the module.
 
-   For **iOS**: Hit <kbd>Cmd ⌘</kbd> + <kbd>R</kbd> in your iOS Simulator to reload the app and see your changes!
+```kotlin
+   <---- MainApplication.kt ---->
+   package com.<your_project>
 
-## Congratulations! :tada:
+   import android.app.Application
+   import com.facebook.react.PackageList
+   import com.facebook.react.ReactApplication
+   import com.facebook.react.ReactHost
+   import com.facebook.react.ReactNativeHost
+   import com.facebook.react.ReactPackage
+   import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
+   import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+   import com.facebook.react.defaults.DefaultReactNativeHost
+   import com.facebook.soloader.SoLoader
+   import com.test.BatteryPackage
 
-You've successfully run and modified your React Native App. :partying_face:
+   class MainApplication : Application(), ReactApplication {
 
-### Now what?
+     override val reactNativeHost: ReactNativeHost =
+         object : DefaultReactNativeHost(this) {
+           override fun getPackages(): List<ReactPackage> =
+               PackageList(this).packages.apply {
+                 add(BatteryPackage())
+                 // Packages that cannot be autolinked yet can be added manually here, for example:
+                 // add(MyReactNativePackage())
+               }
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [Introduction to React Native](https://reactnative.dev/docs/getting-started).
+           override fun getJSMainModuleName(): String = "index"
 
-# Troubleshooting
+           override fun getUseDeveloperSupport(): Boolean = BuildConfig.DEBUG
 
-If you can't get this to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+           override val isNewArchEnabled: Boolean = BuildConfig.IS_NEW_ARCHITECTURE_ENABLED
+           override val isHermesEnabled: Boolean = BuildConfig.IS_HERMES_ENABLED
+         }
 
-# Learn More
+     override val reactHost: ReactHost
+       get() = getDefaultReactHost(applicationContext, reactNativeHost)
 
-To learn more about React Native, take a look at the following resources:
+     override fun onCreate() {
+       super.onCreate()
+       SoLoader.init(this, false)
+       if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
+         // If you opted-in for the New Architecture, we load the native entry point for this app.
+         load()
+       }
+     }
+   }
+   ```
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+---
+
+## Usage
+1. Import the module in your React Native component:
+   ```javascript
+   import { NativeModules } from 'react-native';
+
+   const { BatteryModule } = NativeModules;
+
+   const fetchBatteryLevel = async () => {
+       try {
+           const batteryLevel = await BatteryModule.getBatteryLevel();
+           console.log(`Battery Level: ${batteryLevel}%`);
+       } catch (error) {
+           console.error('Error fetching battery level:', error);
+       }
+   };
+
+   export default function App() {
+       useEffect(() => {
+           fetchBatteryLevel();
+       }, []);
+
+       return (
+           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+               <Text>Battery Level:</Text>
+               <Button title="Refresh" onPress={fetchBatteryLevel} />
+           </View>
+       );
+   }
+   ```
+
+---
+
+## Testing
+1. Run the app on Android:
+   ```bash
+   npx react-native run-android
+   ```
+
+---
+
+## Deployment
+Follow these steps to deploy your app on the Play Store:
+1. Build a release version of the app:
+   ```bash
+   npx react-native run-android --variant=release
+   ```
+2. Sign the APK and upload it to the Play Store.
+
+---
+
+## Future Enhancements
+1. Implement and test iOS functionality.
+2. Add a widget for quick battery level monitoring.
+3. Include battery health and charging status.
+4. Optimize for better performance on low-end devices.
+
+---
+
+Feel free to reach out if you encounter any issues or have suggestions for improvement!
+
